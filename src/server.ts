@@ -20,7 +20,7 @@ const db = new RelationshipDb();
 const server = new grpc.Server();
 
 server.addService(relationshipProto.RelationshipService.service, {
-  addEntity: async (call: any, callback: any) => {
+  AddEntity: async (call: any, callback: any) => {
     try {
       const { name, type, properties } = call.request;
       const id = await db.addEntity({ name, type, properties });
@@ -30,7 +30,7 @@ server.addService(relationshipProto.RelationshipService.service, {
     }
   },
 
-  addRelationship: async (call: any, callback: any) => {
+  AddRelationship: async (call: any, callback: any) => {
     try {
       const { source_name, target_name, type, attributes } = call.request;
       
@@ -57,14 +57,13 @@ server.addService(relationshipProto.RelationshipService.service, {
     }
   },
 
-  queryRelationships: async (call: any, callback: any) => {
+  QueryRelationships: async (call: any, callback: any) => {
     try {
       const { source_name, target_name, relationship_type } = call.request;
       const results = await db.queryRelationships(source_name, target_name, relationship_type);
       
-      // Map results to gRPC response
       const response = {
-        entities: [], // In a real scenario, we might return unique entities involved
+        entities: [],
         relationships: results.map((r: any) => ({
           id: r.id,
           source_id: r.source_id,
@@ -79,19 +78,49 @@ server.addService(relationshipProto.RelationshipService.service, {
     } catch (err: any) {
       callback({ code: grpc.status.INTERNAL, message: err.message });
     }
+  },
+
+  FindPath: async (call: any, callback: any) => {
+    try {
+      const { source_name, target_name, max_depth } = call.request;
+      const { nodes, links } = await db.findPath(source_name, target_name, max_depth || 5);
+      
+      callback(null, {
+        entities: nodes,
+        relationships: links,
+        summary: nodes.length > 0 ? `Found path of length ${links.length}.` : 'No path found.'
+      });
+    } catch (err: any) {
+      callback({ code: grpc.status.INTERNAL, message: err.message });
+    }
+  },
+
+  Explore: async (call: any, callback: any) => {
+    try {
+      const { source_name, max_depth } = call.request;
+      const { nodes, links } = await db.explore(source_name, max_depth || 3);
+      
+      callback(null, {
+        entities: nodes,
+        relationships: links,
+        summary: `Explored ${nodes.length} entities and ${links.length} relationships.`
+      });
+    } catch (err: any) {
+      callback({ code: grpc.status.INTERNAL, message: err.message });
+    }
   }
 });
 
 async function main() {
   await db.init();
   const port = '0.0.0.0:50051';
-  server.bindAsync(port, grpc.ServerCredentials.createInsecure(), (err, portNumber) => {
+  
+  server.bindAsync(port, grpc.ServerCredentials.createInsecure(), (err, boundPort) => {
     if (err) {
-      console.error(err);
+      console.error('Failed to bind server:', err);
       return;
     }
-    console.log(`Server running at http://0.0.0.0:${portNumber}`);
-    server.start();
+    console.log(`Server running at http://0.0.0.0:50051`);
   });
 }
 

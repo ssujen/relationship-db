@@ -29,19 +29,19 @@ export class RelationshipDb {
     await this.db.exec(`
       CREATE TABLE IF NOT EXISTS entities (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        type TEXT NOT NULL,
-        properties TEXT NOT NULL
+        name TEXT UNIQUE,
+        type TEXT,
+        properties TEXT
       );
 
       CREATE TABLE IF NOT EXISTS relationships (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        source_id INTEGER NOT NULL,
-        target_id INTEGER NOT NULL,
-        type TEXT NOT NULL,
-        attributes TEXT NOT NULL,
-        FOREIGN KEY (source_id) REFERENCES entities(id),
-        FOREIGN KEY (target_id) REFERENCES entities(id)
+        source_id INTEGER,
+        target_id INTEGER,
+        type TEXT,
+        attributes TEXT,
+        FOREIGN KEY(source_id) REFERENCES entities(id),
+        FOREIGN KEY(target_id) REFERENCES entities(id)
       );
     `);
   }
@@ -61,6 +61,14 @@ export class RelationshipDb {
 
   async getEntityByName(name: string): Promise<Entity | undefined> {
     const row = await this.db!.get('SELECT * FROM entities WHERE name = ?', [name]);
+    if (row) {
+      return { ...row, properties: JSON.parse(row.properties) };
+    }
+    return undefined;
+  }
+  
+  async getEntityById(id: number): Promise<Entity | undefined> {
+    const row = await this.db!.get('SELECT * FROM entities WHERE id = ?', [id]);
     if (row) {
       return { ...row, properties: JSON.parse(row.properties) };
     }
@@ -102,5 +110,120 @@ export class RelationshipDb {
       ...row,
       attributes: JSON.parse(row.attributes)
     }));
+  }
+
+  async getNeighbors(entityId: number): Promise<{ entity: Entity, relationship: Relationship }[]> {
+    const query = `
+      SELECT r.*, e.name, e.type as entity_type, e.properties
+      FROM relationships r
+      JOIN entities e ON r.target_id = e.id
+      WHERE r.source_id = ?
+      UNION
+      SELECT r.*, e.name, e.type as entity_type, e.properties
+      FROM relationships r
+      JOIN entities e ON r.source_id = e.id
+      WHERE r.target_id = ?
+    `;
+    const rows = await this.db!.all(query, [entityId, entityId]);
+    return rows.map(row => ({
+      entity: {
+        id: row.source_id === entityId ? row.target_id : row.source_id,
+        name: row.name,
+        type: row.entity_type,
+        properties: JSON.parse(row.properties)
+      },
+      relationship: {
+        id: row.id,
+        source_id: row.source_id,
+        target_id: row.target_id,
+        type: row.type,
+        attributes: JSON.parse(row.attributes)
+      }
+    }));
+  }
+
+  async findPath(sourceName: string, targetName: string, maxDepth: number = 5): Promise<{ nodes: Entity[], links: Relationship[] }> {
+    const source = await this.getEntityByName(sourceName);
+    const target = await this.getEntityByName(targetName);
+
+    if (!source || !target) return { nodes: [], links: [] };
+    if (source.id === target.id) return { nodes: [source], links: [] };
+
+    const queue: { id: number, path: number[], links: number[] }[] = [{ id: source.id!, path: [source.id!], links: [] }];
+    const visited = new Set<number>([source.id!]);
+
+    while (queue.length > 0) {
+      const { id, path, links } = queue.shift()!;
+      if (path.length > maxDepth) continue;
+
+      const neighbors = await this.getNeighbors(id);
+      for (const { entity, relationship } of neighbors) {
+        if (entity.id === target.id) {
+          const finalPath = [...path, entity.id!];
+          const finalLinks = [...links, relationship.id!];
+          
+          // Hydrate entities and relationships
+          const nodes = await Promise.all(finalPath.map(nid => this.getEntityById(nid)));
+          const rels = await Promise.all(finalLinks.map(rid => this.getRelationshipById(rid)));
+          
+          return {
+            nodes: nodes.filter(n => !!n) as Entity[],
+            links: rels.filter(r => !!r) as Relationship[]
+          };
+        }
+
+        if (!visited.has(entity.id!)) {
+          visited.add(entity.id!);
+          queue.push({
+            id: entity.id!,
+            path: [...path, entity.id!],
+            links: [...links, relationship.id!]
+          });
+        }
+      }
+    }
+
+    return { nodes: [], links: [] };
+  }
+
+  async explore(sourceName: string, maxDepth: number = 3): Promise<{ nodes: Entity[], links: Relationship[] }> {
+    const source = await this.getEntityByName(sourceName);
+    if (!source) return { nodes: [], links: [] };
+
+    const nodesMap = new Map<number, Entity>();
+    const linksMap = new Map<number, Relationship>();
+    nodesMap.set(source.id!, source);
+
+    const queue: { id: number, depth: number }[] = [{ id: source.id!, depth: 0 }];
+    const visited = new Set<number>([source.id!]);
+
+    while (queue.length > 0) {
+      const { id, depth } = queue.shift()!;
+      if (depth >= maxDepth) continue;
+
+      const neighbors = await this.getNeighbors(id);
+      for (const { entity, relationship } of neighbors) {
+        nodesMap.set(entity.id!, entity);
+        linksMap.set(relationship.id!, relationship);
+
+        if (!visited.has(entity.id!)) {
+          visited.add(entity.id!);
+          queue.push({ id: entity.id!, depth: depth + 1 });
+        }
+      }
+    }
+
+    return {
+      nodes: Array.from(nodesMap.values()),
+      links: Array.from(linksMap.values())
+    };
+  }
+
+  async getRelationshipById(id: number): Promise<Relationship | undefined> {
+    const row = await this.db!.get('SELECT * FROM relationships WHERE id = ?', [id]);
+    if (row) {
+      return { ...row, attributes: JSON.parse(row.attributes) };
+    }
+    return undefined;
   }
 }

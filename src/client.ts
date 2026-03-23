@@ -15,13 +15,13 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 const relationshipProto: any = grpc.loadPackageDefinition(packageDefinition).relationship;
 
 const client = new relationshipProto.RelationshipService(
-  'localhost:50051',
+  'localhost:51051',
   grpc.credentials.createInsecure()
 );
 
 function addEntity(name: string, type: string, properties: Record<string, string>): Promise<number> {
   return new Promise((resolve, reject) => {
-    client.addEntity({ name, type, properties }, (err: any, response: any) => {
+    client.AddEntity({ name, type, properties }, (err: any, response: any) => {
       if (err) reject(err);
       else resolve(response.id);
     });
@@ -30,7 +30,7 @@ function addEntity(name: string, type: string, properties: Record<string, string
 
 function addRelationship(sourceName: string, targetName: string, type: string, attributes: Record<string, string>): Promise<void> {
   return new Promise((resolve, reject) => {
-    client.addRelationship({ source_name: sourceName, target_name: targetName, type, attributes }, (err: any, response: any) => {
+    client.AddRelationship({ source_name: sourceName, target_name: targetName, type, attributes }, (err: any, response: any) => {
       if (err) reject(err);
       else resolve();
     });
@@ -46,31 +46,62 @@ function queryRelationships(sourceName?: string, targetName?: string, relType?: 
   });
 }
 
-async function runTest() {
+function findPath(sourceName: string, targetName: string, maxDepth: number = 5): Promise<any> {
+  return new Promise((resolve, reject) => {
+    client.FindPath({ source_name: sourceName, target_name: targetName, max_depth: maxDepth }, (err: any, response: any) => {
+      if (err) reject(err);
+      else resolve(response);
+    });
+  });
+}
+
+function explore(sourceName: string, maxDepth: number = 3): Promise<any> {
+  return new Promise((resolve, reject) => {
+    client.Explore({ source_name: sourceName, max_depth: maxDepth }, (err: any, response: any) => {
+      if (err) reject(err);
+      else resolve(response);
+    });
+  });
+}
+
+async function setupTestData() {
+  console.log('--- Setting up test data ---');
+  const aliceId = await addEntity('Alice', 'Person', {});
+  const bobId = await addEntity('Bob', 'Person', {});
+  const charlieId = await addEntity('Charlie', 'Person', {});
+  const daveId = await addEntity('David', 'Person', {});
+
+  console.log('--- Adding relationships (Chain: Alice -> Bob -> Charlie -> David) ---');
+  await addRelationship('Alice', 'Bob', 'friend', {});
+  await addRelationship('Bob', 'Charlie', 'friend', {});
+  await addRelationship('Charlie', 'David', 'friend', {});
+  console.log('--- Test data setup complete ---\n');
+  return { aliceId, bobId, charlieId, daveId };
+}
+
+async function runTests() {
+  console.log('Starting advanced query tests...');
   try {
-    console.log('--- Adding entities ---');
-    await addEntity('Mary', 'Person', { age: '30' });
-    await addEntity('John', 'Person', { age: '35' });
-    await addEntity('Trump', 'Person', {});
-    await addEntity('Powel', 'Person', {});
+    const { aliceId, bobId, charlieId, daveId } = await setupTestData();
 
-    console.log('--- Adding relationships ---');
-    await addRelationship('John', 'Mary', 'husband_of', { since: '2010' });
-    await addRelationship('Trump', 'Powel', 'hates', { intensity: 'high' });
+    console.log('--- Pathfinding: Alice to Charlie ---');
+    const path1 = await findPath('Alice', 'Charlie');
+    console.log('Result:', path1.summary);
+    console.log('Path Nodes:', path1.entities.map((e: any) => e.name).join(' -> '));
 
-    console.log('--- Querying: Who is the husband to Mary? ---');
-    const q1 = await queryRelationships(undefined, 'Mary', 'husband_of');
-    // Note: The query result returns source_name if joined, or just ids. 
-    // My server implementation currently returns raw relationship rows.
-    console.log('Result 1:', q1.summary, JSON.stringify(q1.relationships, null, 2));
+    console.log('--- Pathfinding: Alice to David ---');
+    const path2 = await findPath('Alice', 'David', 5);
+    console.log('Result:', path2.summary);
+    console.log('Path Nodes:', path2.entities.map((e: any) => e.name).join(' -> '));
 
-    console.log('--- Querying: Does Trump hate Powel? ---');
-    const q2 = await queryRelationships('Trump', 'Powel', 'hates');
-    console.log('Result 2:', q2.summary, JSON.stringify(q2.relationships, null, 2));
+    console.log('--- Exploration: Alice (depth 2) ---');
+    const exp1 = await explore('Alice', 2);
+    console.log('Result:', exp1.summary);
+    console.log('Found Entities:', exp1.entities.map((e: any) => e.name).join(', '));
 
   } catch (err) {
     console.error('Test failed:', err);
   }
 }
 
-runTest();
+runTests();
