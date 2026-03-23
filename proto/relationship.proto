@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package relationship;
 
+option go_package = "./proto";
+
 service RelationshipService {
   rpc AddEntity (AddEntityRequest) returns (AddEntityResponse);
   rpc AddRelationship (AddRelationshipRequest) returns (AddRelationshipResponse);
