@@ -30,6 +30,18 @@ This backend provides a gRPC service for managing and querying a personal relati
    npx ts-node src/client.ts
    ```
 
+### Docker Usage
+
+1. **Build the image**:
+   ```bash
+   docker build -t relationship-db .
+   ```
+2. **Run the container**:
+   ```bash
+   docker run -p 50051:50051 -v $(pwd)/data:/app/data relationship-db
+   ```
+   *Note: Using a volume for `/app/data` ensures your relationship data persists across container restarts.*
+
 ## Database
 
 The data is stored in a SQLite file at `data/relationships.db`.
