@@ -1,0 +1,25 @@
+{
+  "name": "relationship-db",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.8.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/sqlite3": "^3.1.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  }
+}

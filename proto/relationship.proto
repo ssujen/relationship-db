@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package relationship;
+
+service RelationshipService {
+  rpc AddEntity (AddEntityRequest) returns (AddEntityResponse);
+  rpc AddRelationship (AddRelationshipRequest) returns (AddRelationshipResponse);
+  rpc QueryRelationships (QueryRequest) returns (QueryResponse);
+}
+
+message AddEntityRequest {
+  string name = 1;
+  string type = 2; // e.g., "Person", "Place"
+  map<string, string> properties = 3;
+}
+
+message AddEntityResponse {
+  int32 id = 1;
+  string message = 2;
+}
+
+message AddRelationshipRequest {
+  string source_name = 1;
+  string target_name = 2;
+  string type = 3; // e.g., "husband_of", "hates"
+  map<string, string> attributes = 4;
+}
+
+message AddRelationshipResponse {
+  string message = 1;
+}
+
+message QueryRequest {
+  string source_name = 1;
+  string target_name = 2;
+  string relationship_type = 3;
+}
+
+message Entity {
+  int32 id = 1;
+  string name = 2;
+  string type = 3;
+  map<string, string> properties = 4;
+}
+
+message Relationship {
+  int32 id = 1;
+  int32 source_id = 2;
+  int32 target_id = 3;
+  string type = 4;
+  map<string, string> attributes = 5;
+}
+
+message QueryResponse {
+  repeated Entity entities = 1;
+  repeated Relationship relationships = 2;
+  string summary = 3;
+}

@@ -1,0 +1,57 @@
+@startuml
+
+package "Relationship Backend" {
+  class RelationshipService {
+    + AddEntity(AddEntityRequest): AddEntityResponse
+    + AddRelationship(AddRelationshipRequest): AddRelationshipResponse
+    + QueryRelationships(QueryRequest): QueryResponse
+  }
+
+  class RelationshipDb {
+    - db: Database
+    + init(): Promise<void>
+    + addEntity(Entity): Promise<number>
+    + getEntityByName(string): Promise<Entity>
+    + addRelationship(Relationship): Promise<void>
+    + queryRelationships(src, target, type): Promise<any>
+  }
+
+  interface Entity {
+    + id: number
+    + name: string
+    + type: string
+    + properties: JSON
+  }
+
+  interface Relationship {
+    + id: number
+    + source_id: number
+    + target_id: number
+    + type: string
+    + attributes: JSON
+  }
+
+  RelationshipService --> RelationshipDb : uses
+  RelationshipDb ..> Entity : manages
+  RelationshipDb ..> Relationship : manages
+}
+
+package "Protocol Buffers" {
+  class AddEntityRequest {
+    + name: String
+    + type: String
+    + properties: Map
+  }
+  
+  class AddRelationshipRequest {
+    + source_name: String
+    + target_name: String
+    + type: String
+    + attributes: Map
+  }
+
+  RelationshipService ..> AddEntityRequest : receives
+  RelationshipService ..> AddRelationshipRequest : receives
+}
+
+@enduml
